@@ -1,36 +1,3 @@
-from flask import Flask, request, render_template, redirect, flash
-import email
-from email import policy
-from email.parser import BytesParser
-import re
-
-app = Flask(__name__)
-app.secret_key = "dein_geheimer_schluessel"  # Wähle einen sicheren Secret Key
-
-@app.route("/", methods=["GET", "POST"])
-def index():
-    if request.method == "POST":
-        # Check, ob eine Datei hochgeladen wurde
-        if 'email_file' not in request.files:
-            flash("Keine Datei ausgewählt.")
-            return redirect(request.url)
-        file = request.files["email_file"]
-        if file.filename == "":
-            flash("Keine Datei ausgewählt.")
-            return redirect(request.url)
-        
-        try:
-            # Die Datei wird direkt aus dem File-Stream geparst
-            msg = BytesParser(policy=policy.default).parse(file)
-        except Exception as e:
-            return f"Fehler beim Parsen der E-Mail: {e}"
-        
-        # Analyse der E-Mail anhand von Header-Daten und URL-Suche
-        analysis_result = analyze_email(msg)
-        return render_template("result.html", analysis=analysis_result)
-        
-    return render_template("index.html")
-
 def analyze_email(msg):
     results = {}
     
@@ -39,8 +6,6 @@ def analyze_email(msg):
     results["From"] = msg.get("From", "Unbekannt")
     results["To"] = msg.get("To", "Unbekannt")
     results["Date"] = msg.get("Date", "Unbekannt")
-    
-    # Reply-To-Header, falls vorhanden
     reply_to = msg.get("Reply-To", "")
     results["Reply-To"] = reply_to if reply_to else "Nicht vorhanden"
     
@@ -52,42 +17,38 @@ def analyze_email(msg):
             domain = match.group(1)
             if "dhl" in sender.lower():
                 if domain.lower() != "dhl.de":
-                    results["Warning"] = "DHL E-Mail kommt nicht von einer dhl.de Adresse!"
+                    results["Warnung"] = "Auffällig: Absender-Domain stimmt nicht (sollte dhl.de sein)!"
                 else:
-                    results["Warning"] = "Absender-Domain stimmt."
+                    results["Warnung"] = "Absender-Domain ist korrekt."
             else:
-                results["Warning"] = "Kein spezifischer Test für den Absender durchgeführt."
+                results["Warnung"] = "Kein spezifischer Test für den Absender durchgeführt."
         else:
-            results["Warning"] = "Absender-Domain konnte nicht extrahiert werden."
+            results["Warnung"] = "Absender-Domain konnte nicht extrahiert werden."
     else:
-        results["Warning"] = "Keine Absender-Information vorhanden."
+        results["Warnung"] = "Keine Absender-Information vorhanden."
     
-    # Ausgewählte Received-Header anzeigen (limitierte Ausgabe)
+    # Anzeige der ersten Received-Header (limitierte Ausgabe)
     received_headers = msg.get_all("Received")
     if received_headers:
         results["Received"] = "\n".join(received_headers[:3])
     else:
         results["Received"] = "Keine Received-Header vorhanden."
-    
-    # E-Mail-Body analysieren: Falls vorhanden, werden alle URLs gesucht
+
+    # E-Mail-Body analysieren: URLs suchen
     body = ""
     if msg.is_multipart():
-        # Für Multipart-E-Mails wird der Teil mit content-type "text/plain" extrahiert
         for part in msg.walk():
             if part.get_content_type() == "text/plain":
                 body += part.get_content()
     else:
         body = msg.get_content()
-    
     results["URLs"] = extract_urls(body)
-    
+
+    # Berechne anhand der Warnung eine Phishing-Wahrscheinlichkeit:
+    # (Dies ist ein simples Beispiel. In einer echten Anwendung sollten komplexere Heuristiken verwendet werden.)
+    if "stimmt" in results["Warnung"]:
+        results["phishing_probability"] = 10  # z. B. 10% Risiko, wenn alles passt
+    else:
+        results["phishing_probability"] = 90  # z. B. 90% Risiko, wenn Warnungen vorhanden sind
+
     return results
-
-def extract_urls(text):
-    # Einfache Regex zur Suche nach http/https-URLs
-    url_regex = re.compile(r'https?://[^\s]+')
-    urls = url_regex.findall(text)
-    return urls if urls else ["Keine URLs gefunden"]
-
-if __name__ == "__main__":
-    app.run(debug=True)

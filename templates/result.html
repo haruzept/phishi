@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Ergebnis der E-Mail-Analyse</title>
+  <style>
+    .summary {
+      background-color: #e7f7e7;
+      border: 1px solid #5cb85c;
+      padding: 15px;
+      margin-bottom: 20px;
+      font-size: 1.1em;
+    }
+    .warning {
+      background-color: #f7e7e7;
+      border: 1px solid #d9534f;
+      padding: 15px;
+      margin-bottom: 20px;
+      font-size: 1.1em;
+    }
+    .details {
+      display: none;
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      background-color: #f9f9f9;
+    }
+    .toggle-btn {
+      background-color: #007bff;
+      color: #fff;
+      padding: 8px 12px;
+      border: none;
+      cursor: pointer;
+      font-size: 1em;
+    }
+  </style>
+  <script>
+    function toggleDetails() {
+      var detailsDiv = document.getElementById('details');
+      if (detailsDiv.style.display === 'none' || detailsDiv.style.display === '') {
+        detailsDiv.style.display = 'block';
+      } else {
+        detailsDiv.style.display = 'none';
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>Ergebnis der E-Mail-Analyse</h1>
+  
+  <!-- Zusammenfassung (vereinfacht) -->
+  {% if "Warnung" in analysis and analysis['Warnung'] != "Absender-Domain stimmt." %}
+    <div class="warning">
+      <strong>Warnung!</strong> Es wurden einige Hinweise gefunden, die auf eine unsichere E-Mail hindeuten. Bitte prüfen Sie den Absender und den Inhalt nochmals.
+    </div>
+  {% else %}
+    <div class="summary">
+      Die E-Mail weist keine kritischen Auffälligkeiten auf und erscheint auf den ersten Blick vertrauenswürdig.
+    </div>
+  {% endif %}
+
+  <!-- Button zum Anzeigen von Details -->
+  <button class="toggle-btn" onclick="toggleDetails()">Technische Details anzeigen/verbergen</button>
+  
+  <div id="details" class="details">
+    <h2>Technische Details</h2>
+    <p><strong>Subject:</strong> {{ analysis['Subject'] }}</p>
+    <p><strong>From:</strong> {{ analysis['From'] }}</p>
+    <p><strong>To:</strong> {{ analysis['To'] }}</p>
+    <p><strong>Date:</strong> {{ analysis['Date'] }}</p>
+    <p><strong>Reply-To:</strong> {{ analysis['Reply-To'] }}</p>
+    <p><strong>Hinweis:</strong> {{ analysis['Warnung'] }}</p>
+    <h3>Verlauf der E-Mail (Received-Header):</h3>
+    <pre>{{ analysis['Received'] }}</pre>
+    <h3>Gefundene URLs:</h3>
+    <ul>
+       {% for url in analysis['URLs'] %}
+         <li>{{ url }}</li>
+       {% endfor %}
+    </ul>
+  </div>
+  
+  <p><a href="/">Zurück zur Startseite</a></p>
+</body>
+</html>
