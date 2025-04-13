@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Analyse Ergebnis</title>
+</head>
+<body>
+    <h1>Ergebnis der E-Mail-Analyse</h1>
+    <p><strong>Subject:</strong> {{ analysis['Subject'] }}</p>
+    <p><strong>From:</strong> {{ analysis['From'] }}</p>
+    <p><strong>To:</strong> {{ analysis['To'] }}</p>
+    <p><strong>Date:</strong> {{ analysis['Date'] }}</p>
+    <p><strong>Reply-To:</strong> {{ analysis['Reply-To'] }}</p>
+    <p><strong>Warnung:</strong> {{ analysis['Warning'] }}</p>
+    
+    <h2>Erste Received-Header:</h2>
+    <pre>{{ analysis['Received'] }}</pre>
+    
+    <h2>Gefundene URLs:</h2>
+    <ul>
+       {% for url in analysis['URLs'] %}
+         <li>{{ url }}</li>
+       {% endfor %}
+    </ul>
+    
+    <p><a href="/">Zurück zur Startseite</a></p>
+</body>
+</html>
