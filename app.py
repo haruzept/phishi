@@ -51,6 +51,17 @@ def check_from_field(msg):
     if display_name and email_domain and display_name.lower() not in email_domain:
         score += 40
         details.append(f"Anzeigename '{display_name}' passt nicht zur Domain '{email_domain}'.")
+    return score, details, display_name.lower(), email_domain
+
+def check_reply_to(reply_to, from_domain, display_name):
+    score = 0
+    details = []
+    if reply_to:
+        _, reply_address = parseaddr(reply_to)
+        reply_domain = reply_address.split('@')[-1].lower() if "@" in reply_address else ""
+        if reply_domain and reply_domain not in from_domain and display_name not in reply_domain:
+            score += 25
+            details.append("Antwortadresse passt nicht zum Absender oder widerspricht dem Absendernamen.")
     return score, details
 
 def check_report_mailto(body):
@@ -79,9 +90,14 @@ def calculate_phishing_score(msg):
     overall_score = 0
     score_details = []
 
-    score_from, details_from = check_from_field(msg)
+    score_from, details_from, display_name, from_domain = check_from_field(msg)
     overall_score += score_from
     score_details.extend(details_from)
+
+    reply_to = msg.get("Reply-To", "")
+    score_reply, details_reply = check_reply_to(reply_to, from_domain, display_name)
+    overall_score += score_reply
+    score_details.extend(details_reply)
 
     auth_results = msg.get("Authentication-Results", "").lower()
     if "spf=temperror" in auth_results or "spf=none" in auth_results:
@@ -120,7 +136,7 @@ def calculate_phishing_score(msg):
 
     if overall_score > 100:
         overall_score = 100
-    return overall_score, score_details
+    return overall_score, list(set(score_details))  # doppelte Begründungen vermeiden
 
 def analyze_email(msg):
     results = {}

@@ -4,105 +4,135 @@
   <meta charset="UTF-8">
   <title>Ergebnis der E-Mail-Analyse</title>
   <style>
-    .summary {
-      background-color: #e7f7e7;
-      border: 1px solid #5cb85c;
-      padding: 15px;
-      margin-bottom: 20px;
-      font-size: 1.1em;
+    body { font-family: sans-serif; margin: 20px; }
+    .ampel { display: flex; justify-content: center; gap: 20px; margin-bottom: 10px; }
+    .light {
+      width: 50px; height: 50px; border-radius: 50%;
+      background-color: #ccc;
+      box-shadow: inset 0 0 8px rgba(0,0,0,0.2);
+      transition: 0.3s ease;
     }
-    .warning {
-      background-color: #f7e7e7;
-      border: 1px solid #d9534f;
-      padding: 15px;
-      margin-bottom: 20px;
-      font-size: 1.1em;
-    }
-    .phishing-db-hit {
-      background-color: #fff3cd;
-      border: 1px solid #ffecb5;
-      padding: 15px;
-      margin-bottom: 20px;
-      font-size: 1.1em;
+    .active.green  { background-color: #28a745; box-shadow: 0 0 15px #28a745; }
+    .active.yellow { background-color: #ffc107; box-shadow: 0 0 15px #ffc107; }
+    .active.red    { background-color: #dc3545; box-shadow: 0 0 15px #dc3545; }
+    .score-label { text-align: center; font-size: 1.4em; font-weight: bold; }
+    .fazit { padding: 15px; margin: 15px 0; border: 1px solid; font-size: 1.1em; }
+    .green-box  { background: #e7f7e7; border-color: #28a745; }
+    .yellow-box { background: #fff3cd; border-color: #ffc107; }
+    .red-box    { background: #f8d7da; border-color: #dc3545; }
+    .toggle-btn {
+      background-color: #007bff; color: white; padding: 8px 12px;
+      border: none; cursor: pointer; font-size: 1em;
     }
     .details {
-      display: none;
-      margin-top: 20px;
-      padding: 10px;
-      border: 1px solid #ccc;
-      background-color: #f9f9f9;
+      display: none; margin-top: 20px; padding: 15px;
+      border: 1px solid #ccc; background-color: #f9f9f9;
     }
-    .toggle-btn {
-      background-color: #007bff;
-      color: #fff;
-      padding: 8px 12px;
-      border: none;
-      cursor: pointer;
-      font-size: 1em;
-    }
+    ul { margin-top: 10px; }
+    .data-box { font-family: monospace; background: #eee; padding: 3px 6px; border-radius: 4px; }
   </style>
   <script>
     function toggleDetails() {
-      var detailsDiv = document.getElementById('details');
-      if (detailsDiv.style.display === 'none' || detailsDiv.style.display === '') {
-        detailsDiv.style.display = 'block';
+      var div = document.getElementById("details");
+      if (div.style.display === "none") {
+         div.style.display = "block";
       } else {
-        detailsDiv.style.display = 'none';
+         div.style.display = "none";
       }
     }
   </script>
 </head>
 <body>
-  <h1>Ergebnis der E-Mail-Analyse</h1>
+
+<h1>Ergebnis der E-Mail-Analyse</h1>
+
+{% set score = analysis['phishing_probability'] %}
+{% if score < 20 %}
+  {% set farbe = 'green' %}
+  {% set text = 'Diese E-Mail erscheint unbedenklich.' %}
+{% elif score <= 69 %}
+  {% set farbe = 'yellow' %}
+  {% set text = 'Diese E-Mail enthält Auffälligkeiten. Bitte prüfen Sie sie sorgfältig.' %}
+{% else %}
+  {% set farbe = 'red' %}
+  {% set text = 'Diese E-Mail weist starke Merkmale für Phishing auf!' %}
+{% endif %}
+
+<div class="ampel">
+  <div class="light {% if farbe == 'red' %}active red{% endif %}"></div>
+  <div class="light {% if farbe == 'yellow' %}active yellow{% endif %}"></div>
+  <div class="light {% if farbe == 'green' %}active green{% endif %}"></div>
+</div>
+
+<div class="score-label">{{ score }} %</div>
+<div class="fazit {{ farbe }}-box"><strong>{{ text }}</strong></div>
+
+<h3>Warum diese Bewertung?</h3>
+<ul>
+  {% set user_reasons_displayed = false %}
   
-  {% set db_treffer = false %}
-  {% for hinweis in analysis['score_details'] %}
-    {% if 'Phishing-Datenbank' in hinweis %}
-      {% set db_treffer = true %}
+  {# Hinweis: Anzeigename passt nicht zur Domain #}
+  {% for detail in analysis['score_details'] %}
+    {% if 'Anzeigename' in detail %}
+      <li>{{ detail }}</li>
+      {% set user_reasons_displayed = true %}
     {% endif %}
   {% endfor %}
-
-  {% if analysis['phishing_probability'] >= 50 %}
-    <div class="warning">
-      <strong>Warnung!</strong> Es wurden Hinweise gefunden, die auf eine potenziell gefährliche E-Mail hindeuten.
-    </div>
-  {% else %}
-    <div class="summary">
-      Die E-Mail weist keine kritischen Auffälligkeiten auf und erscheint auf den ersten Blick unauffällig.
-    </div>
-  {% endif %}
-
-  {% if db_treffer %}
-    <div class="phishing-db-hit">
-      <strong>Achtung:</strong> Mindestens eine Domain wurde in der bekannten Phishing-Datenbank gefunden!
-    </div>
-  {% endif %}
-
-  <button class="toggle-btn" onclick="toggleDetails()">Technische Details anzeigen/verbergen</button>
   
-  <div id="details" class="details">
-    <h2>Technische Details</h2>
-    <p><strong>Subject:</strong> {{ analysis['Subject'] }}</p>
-    <p><strong>From:</strong> {{ analysis['From'] }}</p>
-    <p><strong>To:</strong> {{ analysis['To'] }}</p>
-    <p><strong>Date:</strong> {{ analysis['Date'] }}</p>
-    <p><strong>Reply-To:</strong> {{ analysis['Reply-To'] }}</p>
-    <h3>Verlauf der E-Mail (Received-Header):</h3>
-    <pre>{{ analysis['Received'] }}</pre>
-    <h3>Gefundene URLs:</h3>
-    <ul>
-       {% for url in analysis['URLs'] %}
-         <li>{{ url }}</li>
-       {% endfor %}
-    </ul>
-    <h3>Bewertungsdetails:</h3>
-    <ul>
-      {% for detail in analysis['score_details'] %}
-        <li>{{ detail }}</li>
-      {% endfor %}
-    </ul>
-  </div>
+  {# Hinweis: Antwortadresse passt nicht zum Absender #}
+  {% for detail in analysis['score_details'] %}
+    {% if 'Antwortadresse' in detail or 'widerspricht' in detail %}
+      <li>{{ detail }}</li>
+      {% set user_reasons_displayed = true %}
+    {% endif %}
+  {% endfor %}
   
-  <p><a href="/">Zurück zur Startseite</a></p>
+  {# Hinweis: Phishing-Datenbanktreffer #}
+  {% set phishing_hit = namespace(found = false) %}
+  {% for detail in analysis['score_details'] %}
+    {% if 'Phishing-Datenbank' in detail and not phishing_hit.found %}
+      <li>{{ detail }}</li>
+      {% set phishing_hit.found = true %}
+      {% set user_reasons_displayed = true %}
+    {% endif %}
+  {% endfor %}
+  
+  {# Fallback, falls keine Endanwender-Hinweise vorhanden sind #}
+  {% if not user_reasons_displayed %}
+    <li>
+      Bitte prüfen Sie die E-Mail besonders sorgfältig. 
+      Weitere technische Faktoren und Merkmale entnehmen Sie bitte unter „Technische Details“.
+    </li>
+  {% endif %}
+</ul>
+
+<button class="toggle-btn" onclick="toggleDetails()">Technische Details anzeigen/verbergen</button>
+
+<div class="details" id="details">
+  <h3>Technische Details</h3>
+  <p><strong>Subject:</strong> {{ analysis['Subject'] }}</p>
+  <p><strong>From:</strong> {{ analysis['From'] }}</p>
+  <p><strong>To:</strong> {{ analysis['To'] }}</p>
+  <p><strong>Date:</strong> {{ analysis['Date'] }}</p>
+  <p><strong>Reply-To:</strong> {{ analysis['Reply-To'] }}</p>
+  <pre>{{ analysis['Received'] }}</pre>
+
+  <h4>Gefundene URLs:</h4>
+  <ul>
+    {% for url in analysis['URLs'] %}
+      <li>{{ url }}</li>
+    {% endfor %}
+  </ul>
+
+  <h4>Technische Bewertungen:</h4>
+  <ul>
+    {% for detail in analysis['score_details'] %}
+      <li>{{ detail }}</li>
+    {% endfor %}
+  </ul>
+</div>
+
+<p><a href="/">Zurück zur Startseite</a></p>
+
 </body>
 </html>
