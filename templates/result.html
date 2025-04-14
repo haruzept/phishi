@@ -18,6 +18,13 @@
       margin-bottom: 20px;
       font-size: 1.1em;
     }
+    .phishing-db-hit {
+      background-color: #fff3cd;
+      border: 1px solid #ffecb5;
+      padding: 15px;
+      margin-bottom: 20px;
+      font-size: 1.1em;
+    }
     .details {
       display: none;
       margin-top: 20px;
@@ -48,18 +55,29 @@
 <body>
   <h1>Ergebnis der E-Mail-Analyse</h1>
   
-  <!-- Zusammenfassung (vereinfacht) -->
-  {% if "Warnung" in analysis and analysis['Warnung'] != "Absender-Domain stimmt." %}
+  {% set db_treffer = false %}
+  {% for hinweis in analysis['score_details'] %}
+    {% if 'Phishing-Datenbank' in hinweis %}
+      {% set db_treffer = true %}
+    {% endif %}
+  {% endfor %}
+
+  {% if analysis['phishing_probability'] >= 50 %}
     <div class="warning">
-      <strong>Warnung!</strong> Es wurden einige Hinweise gefunden, die auf eine unsichere E-Mail hindeuten. Bitte prüfen Sie den Absender und den Inhalt nochmals.
+      <strong>Warnung!</strong> Es wurden Hinweise gefunden, die auf eine potenziell gefährliche E-Mail hindeuten.
     </div>
   {% else %}
     <div class="summary">
-      Die E-Mail weist keine kritischen Auffälligkeiten auf und erscheint auf den ersten Blick vertrauenswürdig.
+      Die E-Mail weist keine kritischen Auffälligkeiten auf und erscheint auf den ersten Blick unauffällig.
     </div>
   {% endif %}
 
-  <!-- Button zum Anzeigen von Details -->
+  {% if db_treffer %}
+    <div class="phishing-db-hit">
+      <strong>Achtung:</strong> Mindestens eine Domain wurde in der bekannten Phishing-Datenbank gefunden!
+    </div>
+  {% endif %}
+
   <button class="toggle-btn" onclick="toggleDetails()">Technische Details anzeigen/verbergen</button>
   
   <div id="details" class="details">
@@ -69,7 +87,6 @@
     <p><strong>To:</strong> {{ analysis['To'] }}</p>
     <p><strong>Date:</strong> {{ analysis['Date'] }}</p>
     <p><strong>Reply-To:</strong> {{ analysis['Reply-To'] }}</p>
-    <p><strong>Hinweis:</strong> {{ analysis['Warnung'] }}</p>
     <h3>Verlauf der E-Mail (Received-Header):</h3>
     <pre>{{ analysis['Received'] }}</pre>
     <h3>Gefundene URLs:</h3>
@@ -77,6 +94,12 @@
        {% for url in analysis['URLs'] %}
          <li>{{ url }}</li>
        {% endfor %}
+    </ul>
+    <h3>Bewertungsdetails:</h3>
+    <ul>
+      {% for detail in analysis['score_details'] %}
+        <li>{{ detail }}</li>
+      {% endfor %}
     </ul>
   </div>
   

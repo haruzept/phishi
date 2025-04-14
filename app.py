@@ -4,62 +4,85 @@ from email import policy
 from email.parser import BytesParser
 from email.utils import parseaddr
 import re
+import sqlite3
+import os
 
 app = Flask(__name__)
-app.secret_key = "dein_geheimer_schluessel"  # Bitte einen sicheren Wert wählen
+app.secret_key = "dein_geheimer_schluessel"
+
+DB_PATH = "phishing_data.db"
 
 def extract_urls(text):
-    # Suche nach http- und https-URLs ohne unerwünschte Zeichen
     url_regex = re.compile(r'https?://[^\s"<>]+')
     return url_regex.findall(text)
 
+def check_known_phishing_domains(urls):
+    if not os.path.exists(DB_PATH):
+        return 0, []
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        score = 0
+        details = []
+        for url in urls:
+            domain_match = re.search(r"https?://([\w\.-]+)/?", url)
+            if domain_match:
+                domain = domain_match.group(1).lower()
+                cursor.execute("SELECT domain FROM phishing_domains WHERE domain = ?", (domain,))
+                if cursor.fetchone():
+                    score += 50
+                    details.append(f"Domain {domain} ist in der bekannten Phishing-Datenbank.")
+        return score, details
+    except Exception as e:
+        return 0, [f"Datenbankfehler bei Phishing-Check: {e}"]
+    finally:
+        conn.close()
+
 def check_from_field(msg):
     sender = msg.get("From", "")
-    # Wenn der Sender ein "<" enthält, extrahieren wir manuell den Teil davor als Anzeigename
     if "<" in sender and ">" in sender:
-        display_name = sender.split("<")[0].strip(" \"")
+        display_name = sender.split("<")[0].strip(' "')
         email_addr = sender[sender.find("<")+1:sender.find(">")].strip()
     else:
-        # Fallback: nutze parseaddr
         display_name, email_addr = parseaddr(sender)
     email_domain = email_addr.split('@')[-1].lower() if "@" in email_addr else ""
     details = []
     score = 0
-    # Prüfe anhand eines Regex im Anzeigenamen, ob "microsoft account" vorkommt
-    if display_name and re.search(r'microsoft\s+account', display_name, re.IGNORECASE):
-        if "microsoft.com" not in email_domain:
-            score = 100
-            details.append(f"Anzeigename '{display_name}' suggeriert offiziellen Absender, aber die Adresse ist {email_addr}.")
-        else:
-            details.append("Anzeigename und Absenderadresse stimmen überein.")
+    if display_name and email_domain and display_name.lower() not in email_domain:
+        score += 40
+        details.append(f"Anzeigename '{display_name}' passt nicht zur Domain '{email_domain}'.")
     return score, details
 
 def check_report_mailto(body):
-    """
-    Sucht im HTML-Body nach mailto:-Links und prüft, ob diese verdächtige Domains (z. B. gmail.com)
-    enthalten.
-    """
     score = 0
     details = []
     mailto_matches = re.findall(r'mailto:([^"?\s]+)', body)
     for mail in mailto_matches:
         _, address = parseaddr(mail)
         domain = address.split('@')[-1].lower() if "@" in address else ""
-        if domain == "gmail.com":
-            score += 20
-            details.append(f"Report-Link verweist auf {address} (gmail.com) statt auf eine offizielle Adresse.")
+        if domain:
+            if os.path.exists(DB_PATH):
+                try:
+                    conn = sqlite3.connect(DB_PATH)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT domain FROM phishing_domains WHERE domain = ?", (domain,))
+                    if cursor.fetchone():
+                        score += 30
+                        details.append(f"Mailto-Domain {domain} ist in der Phishing-Datenbank.")
+                except Exception as e:
+                    details.append(f"Datenbankfehler bei Mailto-Prüfung: {e}")
+                finally:
+                    conn.close()
     return score, details
 
 def calculate_phishing_score(msg):
     overall_score = 0
     score_details = []
 
-    # Heuristik 1: From-Header prüfen (Anzeigename vs. Adresse)
     score_from, details_from = check_from_field(msg)
     overall_score += score_from
     score_details.extend(details_from)
 
-    # Heuristik 2: Authentifizierungs-Ergebnisse (SPF, DKIM)
     auth_results = msg.get("Authentication-Results", "").lower()
     if "spf=temperror" in auth_results or "spf=none" in auth_results:
         overall_score += 10
@@ -68,7 +91,6 @@ def calculate_phishing_score(msg):
         overall_score += 10
         score_details.append("DKIM fehlt.")
 
-    # Heuristik 3: Received-Header prüfen (z. B. Loopback (::1))
     received_headers = msg.get_all("Received", [])
     for header in received_headers:
         if "(::1)" in header:
@@ -76,7 +98,6 @@ def calculate_phishing_score(msg):
             score_details.append("Received-Header enthält loopback (::1).")
             break
 
-    # Heuristik 4: HTML-Body analysieren und mailto-Links prüfen
     body = ""
     if msg.is_multipart():
         for part in msg.walk():
@@ -87,22 +108,15 @@ def calculate_phishing_score(msg):
                     continue
     else:
         body = msg.get_content()
-    
+
     report_score, report_details = check_report_mailto(body)
     overall_score += report_score
     score_details.extend(report_details)
 
-    # Heuristik 5: URLs im Body überprüfen (Beispiel: d3l.com statt dhl.com)
     urls = extract_urls(body)
-    for url in urls:
-        m = re.search(r"https?://([\w\.-]+)/?", url)
-        if m:
-            url_domain = m.group(1).lower()
-            # Beispielregel: Falls der Link auf "d3l.com" verweist (statt erwarteter Domain)
-            if "d3l.com" in url_domain:
-                overall_score = 100
-                score_details.append("Link verweist auf d3l.com statt auf die erwartete Domain.")
-                break
+    phishing_db_score, phishing_db_details = check_known_phishing_domains(urls)
+    overall_score += phishing_db_score
+    score_details.extend(phishing_db_details)
 
     if overall_score > 100:
         overall_score = 100
@@ -117,11 +131,9 @@ def analyze_email(msg):
     reply_to = msg.get("Reply-To", "")
     results["Reply-To"] = reply_to if reply_to else "Nicht vorhanden"
 
-    # Ersten 3 Received-Header sammeln
     received_headers = msg.get_all("Received", [])
     results["Received"] = "\n".join(received_headers[:3]) if received_headers else "Keine Received-Header vorhanden."
 
-    # Body aus Text- und HTML-Teilen extrahieren und URLs suchen
     body = ""
     if msg.is_multipart():
         for part in msg.walk():
@@ -132,12 +144,13 @@ def analyze_email(msg):
                     continue
     else:
         body = msg.get_content()
-    results["URLs"] = extract_urls(body)
+    urls = extract_urls(body)
+    results["URLs"] = urls
 
-    # Phishing-Score und Detailinformationen berechnen
     phishing_score, score_details = calculate_phishing_score(msg)
     results["phishing_probability"] = phishing_score
     results["score_details"] = score_details
+    results["Warnung"] = score_details[0] if score_details else "Keine Auffälligkeiten erkannt."
 
     return results
 
