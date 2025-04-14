@@ -2,137 +2,121 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Ergebnis der E-Mail-Analyse</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phishing Analyse Tool</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { font-family: sans-serif; margin: 20px; }
-    .ampel { display: flex; justify-content: center; gap: 20px; margin-bottom: 10px; }
-    .light {
-      width: 50px; height: 50px; border-radius: 50%;
-      background-color: #ccc;
-      box-shadow: inset 0 0 8px rgba(0,0,0,0.2);
-      transition: 0.3s ease;
+    body {
+      background-color: #f8f9fa;
     }
-    .active.green  { background-color: #28a745; box-shadow: 0 0 15px #28a745; }
-    .active.yellow { background-color: #ffc107; box-shadow: 0 0 15px #ffc107; }
-    .active.red    { background-color: #dc3545; box-shadow: 0 0 15px #dc3545; }
-    .score-label { text-align: center; font-size: 1.4em; font-weight: bold; }
-    .fazit { padding: 15px; margin: 15px 0; border: 1px solid; font-size: 1.1em; }
-    .green-box  { background: #e7f7e7; border-color: #28a745; }
-    .yellow-box { background: #fff3cd; border-color: #ffc107; }
-    .red-box    { background: #f8d7da; border-color: #dc3545; }
-    .toggle-btn {
-      background-color: #007bff; color: white; padding: 8px 12px;
-      border: none; cursor: pointer; font-size: 1em;
+    .card-header {
+      font-size: 1.25rem;
+      font-weight: 600;
     }
-    .details {
-      display: none; margin-top: 20px; padding: 15px;
-      border: 1px solid #ccc; background-color: #f9f9f9;
+    .ampel-light {
+      width: 60px; height: 60px; border-radius: 50%; background-color: #ddd;
+      margin: 0 10px;
     }
-    ul { margin-top: 10px; }
-    .data-box { font-family: monospace; background: #eee; padding: 3px 6px; border-radius: 4px; }
+    .green.active { background-color: #28a745; box-shadow: 0 0 15px #28a745; }
+    .yellow.active { background-color: #ffc107; box-shadow: 0 0 15px #ffc107; }
+    .red.active { background-color: #dc3545; box-shadow: 0 0 15px #dc3545; }
+    .data-box {
+      font-family: monospace; background: #eee; padding: 2px 6px;
+      border-radius: 4px; display: inline-block;
+    }
   </style>
-  <script>
-    function toggleDetails() {
-      var div = document.getElementById("details");
-      if (div.style.display === "none") {
-         div.style.display = "block";
-      } else {
-         div.style.display = "none";
-      }
-    }
-  </script>
 </head>
 <body>
+  <div class="container py-5">
+    <div class="mb-4 text-center">
+      <h1 class="fw-bold">E-Mail Phishing Analyse</h1>
+      <p class="text-muted">Lade eine E-Mail-Datei hoch und erhalte eine Bewertung inklusive Details.</p>
+    </div>
 
-<h1>Ergebnis der E-Mail-Analyse</h1>
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <form action="/" method="post" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="email_file" class="form-label">E-Mail-Datei hochladen (.eml, .msg)</label>
+            <input class="form-control" type="file" name="email_file" id="email_file" accept=".eml,.msg" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Analyse starten</button>
+        </form>
+      </div>
+    </div>
 
-{% set score = analysis['phishing_probability'] %}
-{% if score < 20 %}
-  {% set farbe = 'green' %}
-  {% set text = 'Diese E-Mail erscheint unbedenklich.' %}
-{% elif score <= 69 %}
-  {% set farbe = 'yellow' %}
-  {% set text = 'Diese E-Mail enthält Auffälligkeiten. Bitte prüfen Sie sie sorgfältig.' %}
-{% else %}
-  {% set farbe = 'red' %}
-  {% set text = 'Diese E-Mail weist starke Merkmale für Phishing auf!' %}
-{% endif %}
+    <div class="card shadow-sm instructions">
+      <div class="card-header">Anleitungen: E-Mails als EML-Datei speichern</div>
+      <div class="card-body">
+        <div class="accordion" id="guideAccordion">
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingGmail">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGmail">Gmail</button>
+            </h2>
+            <div id="collapseGmail" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+              <div class="accordion-body">
+                1. E-Mail öffnen → Drei-Punkte-Menü → <strong>Original anzeigen</strong><br>
+                2. Klicken Sie auf <strong>Original herunterladen</strong><br>
+                <a href="https://support.google.com/mail/answer/9261412?hl=de" target="_blank">Offizielle Anleitung</a>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingGMX">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGMX">GMX</button>
+            </h2>
+            <div id="collapseGMX" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+              <div class="accordion-body">
+                1. E-Mail öffnen → Drei-Punkte-Menü → <strong>Speichern als EML-Datei</strong><br>
+                <a href="https://hilfe.gmx.net/email/empfangen-und-lesen/email-drucken-speichern.html" target="_blank">Offizielle Anleitung</a>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingWEBDE">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseWEBDE">WEB.DE</button>
+            </h2>
+            <div id="collapseWEBDE" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+              <div class="accordion-body">
+                1. E-Mail öffnen → Drei-Punkte-Menü → <strong>Speichern als EML-Datei</strong><br>
+                <a href="https://hilfe.web.de/email/empfangen-und-lesen/email-drucken-speichern.html" target="_blank">Offizielle Anleitung</a>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingThunderbird">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThunderbird">Thunderbird</button>
+            </h2>
+            <div id="collapseThunderbird" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+              <div class="accordion-body">
+                Rechtsklick auf E-Mail → <strong>Speichern unter...</strong><br>
+                <a href="https://addons.thunderbird.net/de/thunderbird/addon/importexporttools-ng/" target="_blank">Add-on für Massenexport</a>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingOutlook">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOutlook">Outlook</button>
+            </h2>
+            <div id="collapseOutlook" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+              <div class="accordion-body">
+                E-Mail per Drag & Drop auf den Desktop ziehen oder per Drittanbietertools konvertieren<br>
+                <a href="https://support.microsoft.com/de-de/office/speichern-einer-e-mail-nachricht-als-datei-0f12459c-41f0-4d58-81c0-36a52eaa492a" target="_blank">Microsoft Anleitung</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-<div class="ampel">
-  <div class="light {% if farbe == 'red' %}active red{% endif %}"></div>
-  <div class="light {% if farbe == 'yellow' %}active yellow{% endif %}"></div>
-  <div class="light {% if farbe == 'green' %}active green{% endif %}"></div>
-</div>
-
-<div class="score-label">{{ score }} %</div>
-<div class="fazit {{ farbe }}-box"><strong>{{ text }}</strong></div>
-
-<h3>Warum diese Bewertung?</h3>
-<ul>
-  {% set user_reasons_displayed = false %}
-  
-  {# Hinweis: Anzeigename passt nicht zur Domain #}
-  {% for detail in analysis['score_details'] %}
-    {% if 'Anzeigename' in detail %}
-      <li>{{ detail }}</li>
-      {% set user_reasons_displayed = true %}
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="alert alert-info mt-3">
+      {% for message in messages %}<div>{{ message }}</div>{% endfor %}
+    </div>
     {% endif %}
-  {% endfor %}
-  
-  {# Hinweis: Antwortadresse passt nicht zum Absender #}
-  {% for detail in analysis['score_details'] %}
-    {% if 'Antwortadresse' in detail or 'widerspricht' in detail %}
-      <li>{{ detail }}</li>
-      {% set user_reasons_displayed = true %}
-    {% endif %}
-  {% endfor %}
-  
-  {# Hinweis: Phishing-Datenbanktreffer #}
-  {% set phishing_hit = namespace(found = false) %}
-  {% for detail in analysis['score_details'] %}
-    {% if 'Phishing-Datenbank' in detail and not phishing_hit.found %}
-      <li>{{ detail }}</li>
-      {% set phishing_hit.found = true %}
-      {% set user_reasons_displayed = true %}
-    {% endif %}
-  {% endfor %}
-  
-  {# Fallback, falls keine Endanwender-Hinweise vorhanden sind #}
-  {% if not user_reasons_displayed %}
-    <li>
-      Bitte prüfen Sie die E-Mail besonders sorgfältig. 
-      Weitere technische Faktoren und Merkmale entnehmen Sie bitte unter „Technische Details“.
-    </li>
-  {% endif %}
-</ul>
-
-<button class="toggle-btn" onclick="toggleDetails()">Technische Details anzeigen/verbergen</button>
-
-<div class="details" id="details">
-  <h3>Technische Details</h3>
-  <p><strong>Subject:</strong> {{ analysis['Subject'] }}</p>
-  <p><strong>From:</strong> {{ analysis['From'] }}</p>
-  <p><strong>To:</strong> {{ analysis['To'] }}</p>
-  <p><strong>Date:</strong> {{ analysis['Date'] }}</p>
-  <p><strong>Reply-To:</strong> {{ analysis['Reply-To'] }}</p>
-  <pre>{{ analysis['Received'] }}</pre>
-
-  <h4>Gefundene URLs:</h4>
-  <ul>
-    {% for url in analysis['URLs'] %}
-      <li>{{ url }}</li>
-    {% endfor %}
-  </ul>
-
-  <h4>Technische Bewertungen:</h4>
-  <ul>
-    {% for detail in analysis['score_details'] %}
-      <li>{{ detail }}</li>
-    {% endfor %}
-  </ul>
-</div>
-
-<p><a href="/">Zurück zur Startseite</a></p>
-
+    {% endwith %}
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
