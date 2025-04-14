@@ -1,117 +1,122 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <title>E-Mail-Phishing-Analyse</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            margin: 20px;
-        }
-        .instructions {
-            margin-top: 30px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            background: #f9f9f9;
-        }
-        details {
-            margin-bottom: 10px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            background: #fff;
-        }
-        summary {
-            font-weight: bold;
-            cursor: pointer;
-        }
-        a {
-            color: #007bff;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phishing Analyse Tool</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    .card-header {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .ampel-light {
+      width: 60px; height: 60px; border-radius: 50%; background-color: #ddd;
+      margin: 0 10px;
+    }
+    .green.active { background-color: #28a745; box-shadow: 0 0 15px #28a745; }
+    .yellow.active { background-color: #ffc107; box-shadow: 0 0 15px #ffc107; }
+    .red.active { background-color: #dc3545; box-shadow: 0 0 15px #dc3545; }
+    .data-box {
+      font-family: monospace; background: #eee; padding: 2px 6px;
+      border-radius: 4px; display: inline-block;
+    }
+  </style>
 </head>
 <body>
-    <h1>E-Mail-Phishing-Analyse</h1>
-    
-    <form action="/" method="post" enctype="multipart/form-data">
-        <p>Bitte lade eine E-Mail-Datei hoch (Format: EML, MSG etc.):</p>
-        <input type="file" name="email_file" accept=".eml,.msg" required>
-        <br><br>
-        <input type="submit" value="Analyse starten">
-    </form>
-    
-    <div class="instructions">
-        <h2>Anleitungen zum Speichern von E-Mails im EML-Format</h2>
-        
-        <details>
-            <summary>Gmail</summary>
-            <p>
-                <strong>Schritte:</strong>
-                <ol>
-                    <li>Öffnen Sie die gewünschte E-Mail in Gmail.</li>
-                    <li>Klicken Sie oben rechts auf die drei Punkte und wählen Sie <em>Original anzeigen</em>.</li>
-                    <li>Auf der Seite mit dem vollständigen E-Mail-Quelltext klicken Sie auf <em>Download Original</em>.</li>
-                    <li>Speichern Sie die Datei (manchmal als .txt angeboten) und benennen Sie sie um – ändern Sie die Endung in <code>.eml</code>.</li>
-                </ol>
-            </p>
-            <p>Quelle: <a href="https://support.google.com/mail/answer/9261412?hl=de" target="_blank">Gmail Hilfe – EML Export</a></p>
-        </details>
-        
-        <details>
-            <summary>GMX / Web.de</summary>
-            <p>
-                Viele Nutzer berichten, dass in GMX bzw. Web.de (sowohl über den Browser als auch in den mobilen Apps) direkt keine Exportoption im EML-Format verfügbar ist. 
-                Daher empfiehlt es sich, einen E-Mail-Client wie <strong>Thunderbird</strong> zu verwenden. 
-                Richten Sie Ihr GMX/Web.de-Konto per IMAP in Thunderbird ein – dann können Sie die E-Mails problemlos über die Funktion <em>"Speichern unter…"</em> oder über das Add-on <a href="https://addons.thunderbird.net/de/thunderbird/addon/importexporttools-ng/" target="_blank">ImportExportTools NG</a> als <code>.eml</code>-Dateien exportieren.
-            </p>
-            <p>Quelle: <a href="https://hilfe.gmx.net/email/empfangen-und-lesen/email-drucken-speichern.html" target="_blank">GMX Hilfe – E-Mails drucken &amp; speichern</a></p>
-        </details>
-        
-        <details>
-            <summary>Telekom Mail</summary>
-            <p>
-                Auch bei Telekom Mail ist der direkte Export ins EML-Format über die Web-Oberfläche oft nicht verfügbar. 
-                Nutzen Sie hier ebenfalls einen E-Mail-Client wie Thunderbird, um Ihr Konto per IMAP einzurichten und die E-Mails als EML-Dateien zu speichern.
-            </p>
-            <p>Quelle: Die entsprechenden Hinweise finden Sie in den Hilfeseiten von Telekom Mail, z. B.: <a href="https://hilfe.telekom.de" target="_blank">Telekom Hilfe</a> (bitte nach „E-Mail speichern“ oder „Export“ suchen).</p>
-        </details>
-        
-        <details>
-            <summary>Thunderbird</summary>
-            <p>
-                Thunderbird unterstützt den direkten Export von E-Mails im <strong>EML-Format</strong>. 
-                Öffnen Sie die gewünschte E-Mail oder markieren Sie mehrere Mails, und wählen Sie dann im Menü <em>Datei &gt; Speichern unter…</em> aus. 
-                Alternativ können Sie das Add-on <a href="https://addons.thunderbird.net/de/thunderbird/addon/importexporttools-ng/" target="_blank">ImportExportTools NG</a> nutzen, um ganze Ordner effizient zu exportieren.
-            </p>
-            <p>Quelle: <a href="https://support.mozilla.org/de/kb/maildir-format-thunderbird" target="_blank">Thunderbird Hilfe</a></p>
-        </details>
-        
-        <details>
-            <summary>Outlook</summary>
-            <p>
-                Outlook unterstützt nativ das MSG-Format, nicht aber EML. 
-                Für einen EML-Export können Sie jedoch in einigen Fällen im Outlook Web Access (OWA) über <em>Original anzeigen</em> den E-Mail-Quelltext herunterladen und manuell als EML speichern. 
-                Alternativ helfen Drittanbieter-Tools oder Add-Ins, die MSG in EML konvertieren.
-            </p>
-            <p>Quelle: <a href="https://www.codetwo.com/kb/export-email-to-file/" target="_blank">CodeTwo – Export E-Mail in MSG oder EML</a></p>
-        </details>
-        
-        <p>
-            <strong>Hinweis:</strong> Für Endanwender, die keinen direkten Zugriff auf den Export im EML-Format über die Web-Oberfläche haben, empfehlen wir die Einrichtung eines E-Mail-Clients wie Thunderbird. Diese Methode ist benutzerfreundlich und ermöglicht es Ihnen, alle wichtigen Header und Anhänge zu sichern – was für die Phishing-Analyse von entscheidender Bedeutung ist.
-        </p>
+  <div class="container py-5">
+    <div class="mb-4 text-center">
+      <h1 class="fw-bold">E-Mail Phishing Analyse</h1>
+      <p class="text-muted">Lade eine E-Mail-Datei hoch und erhalte eine Bewertung inklusive Details.</p>
     </div>
-    
+
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <form action="/" method="post" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label for="email_file" class="form-label">E-Mail-Datei hochladen (.eml, .msg)</label>
+            <input class="form-control" type="file" name="email_file" id="email_file" accept=".eml,.msg" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Analyse starten</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm instructions">
+      <div class="card-header">Anleitungen: E-Mails als EML-Datei speichern</div>
+      <div class="card-body">
+        <div class="accordion" id="guideAccordion">
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingGmail">
+              <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGmail">Gmail</button>
+            </h2>
+            <div id="collapseGmail" class="accordion-collapse collapse show" data-bs-parent="#guideAccordion">
+              <div class="accordion-body">
+                1. E-Mail öffnen → Drei-Punkte-Menü → <strong>Original anzeigen</strong><br>
+                2. Klicken Sie auf <strong>Original herunterladen</strong><br>
+                <a href="https://support.google.com/mail/answer/9261412?hl=de" target="_blank">Offizielle Anleitung</a>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingGMX">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGMX">GMX</button>
+            </h2>
+            <div id="collapseGMX" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+              <div class="accordion-body">
+                1. E-Mail öffnen → Drei-Punkte-Menü → <strong>Speichern als EML-Datei</strong><br>
+                <a href="https://hilfe.gmx.net/email/empfangen-und-lesen/email-drucken-speichern.html" target="_blank">Offizielle Anleitung</a>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingWEBDE">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseWEBDE">WEB.DE</button>
+            </h2>
+            <div id="collapseWEBDE" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+              <div class="accordion-body">
+                1. E-Mail öffnen → Drei-Punkte-Menü → <strong>Speichern als EML-Datei</strong><br>
+                <a href="https://hilfe.web.de/email/empfangen-und-lesen/email-drucken-speichern.html" target="_blank">Offizielle Anleitung</a>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingThunderbird">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThunderbird">Thunderbird</button>
+            </h2>
+            <div id="collapseThunderbird" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+              <div class="accordion-body">
+                Rechtsklick auf E-Mail → <strong>Speichern unter...</strong><br>
+                <a href="https://addons.thunderbird.net/de/thunderbird/addon/importexporttools-ng/" target="_blank">Add-on für Massenexport</a>
+              </div>
+            </div>
+          </div>
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingOutlook">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOutlook">Outlook</button>
+            </h2>
+            <div id="collapseOutlook" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+              <div class="accordion-body">
+                E-Mail per Drag & Drop auf den Desktop ziehen oder per Drittanbietertools konvertieren<br>
+                <a href="https://support.microsoft.com/de-de/office/speichern-einer-e-mail-nachricht-als-datei-0f12459c-41f0-4d58-81c0-36a52eaa492a" target="_blank">Microsoft Anleitung</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <ul>
-            {% for message in messages %}
-                <li>{{ message }}</li>
-            {% endfor %}
-            </ul>
-        {% endif %}
+    {% if messages %}
+    <div class="alert alert-info mt-3">
+      {% for message in messages %}<div>{{ message }}</div>{% endfor %}
+    </div>
+    {% endif %}
     {% endwith %}
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
