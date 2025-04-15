@@ -3,10 +3,14 @@ from flask import Flask, render_template, request, flash
 from werkzeug.utils import secure_filename
 from email import policy
 from email.parser import BytesParser
+from email.utils import parseaddr
+import re
+import sqlite3
+
 from check_dns import check_dns
-from check_links import check_links
 from check_whois import check_domain_age
-from score_weights import get_color_for_score  # calculate_score wurde entfernt
+from score_weights import get_color_for_score, DKIM_FAIL, SPF_FAIL, DMARC_FAIL, DISPLAY_NAME_MISMATCH
+from check_links import check_links  # benutze die aktuelle Version ohne Companion-Domains
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'eml'}
@@ -18,50 +22,168 @@ app.secret_key = "phishi"
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def get_base_domain(domain):
+    parts = domain.split('.')
+    if len(parts) >= 2:
+        return ".".join(parts[-2:])
+    return domain
+
+def extract_domain(email_address):
+    parts = email_address.split('@')
+    return parts[1].lower() if len(parts) == 2 else ""
+
+def extract_urls(msg):
+    urls = []
+    url_regex = re.compile(r'https?://[^\s"\'<>]+')
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() in ['text/plain', 'text/html']:
+                try:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or 'utf-8'
+                        text = payload.decode(charset, errors='replace')
+                        urls.extend(url_regex.findall(text))
+                except Exception as e:
+                    print("Error decoding part:", e)
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            charset = msg.get_content_charset() or 'utf-8'
+            text = payload.decode(charset, errors='replace')
+            urls.extend(url_regex.findall(text))
+    return list(set(urls))
+
+def get_headers_str(msg):
+    """
+    Gibt alle Header des E-Mail-Objekts als Text-String zurück
+    (Name: Wert).
+    """
+    headers_str = ""
+    for name, value in msg.items():
+        headers_str += f"{name}: {value}\n"
+    return headers_str
+
+def is_domain_known_phishing(domain):
+    """
+    Prüft, ob die angegebene Basisdomain in der Phishing-Datenbank vorhanden ist.
+    """
+    try:
+        conn = sqlite3.connect("phishing_data.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM phishing_domains WHERE domain = ? LIMIT 1", (domain,))
+        result = cursor.fetchone()
+        conn.close()
+        return result is not None
+    except Exception as e:
+        print("Fehler beim Zugriff auf die Phishing-Datenbank:", e)
+        return False
+
+def get_enduser_explanation(score):
+    """
+    Erzeugt eine möglichst einfache Erklärung (Liste von Sätzen) für den Endanwender,
+    abhängig vom ermittelten Score.
+    """
+    if score == 0:
+        return [
+            "Die Analyse ergab keinerlei Auffälligkeiten.",
+            "Diese E-Mail scheint sehr wahrscheinlich echt zu sein."
+        ]
+    elif score < 25:
+        return [
+            "Wir haben nur wenige (möglicherweise harmlose) Auffälligkeiten gefunden.",
+            "Die E-Mail ist wahrscheinlich echt, aber bleiben Sie wachsam."
+        ]
+    elif score < 60:
+        return [
+            "Einige Indizien deuten auf mögliche Manipulation hin.",
+            "Wir empfehlen Ihnen, die E-Mail genauer zu prüfen."
+        ]
+    else:
+        return [
+            "Mehrere Merkmale deuten stark auf Phishing hin.",
+            "Seien Sie besonders vorsichtig und klicken Sie keine Links an."
+        ]
+
 def analyze_email(msg):
     technical_results = []
     total_score = 0
 
-    from_header = msg['From'] or ""
-    from_domain = extract_domain_from_header(from_header)
+    # Header-Infos
+    raw_headers = get_headers_str(msg)
+    auth_results_header = msg.get('Authentication-Results', '')
+    dkim_signature_header = msg.get('DKIM-Signature', '')
+    received_spf_header = msg.get('Received-SPF', '')
 
-    # Prüfe die E-Mail anhand verschiedener Funktionen.
-    # Für check_links wird das ganze Message-Objekt übergeben,
-    # für die anderen nur die Domain.
-    for check_func in [check_dns, check_domain_age, check_links]:
-        score, details = check_func(from_domain if check_func != check_links else msg)
+    from_header = msg.get('From', "")
+    display_name, email_address = parseaddr(from_header)
+    from_domain = extract_domain(email_address)
+    base_domain = get_base_domain(from_domain)
+
+    # DNS- und WHOIS-Prüfungen anhand der Basisdomain
+    for check_func in [check_dns, check_domain_age]:
+        score, details = check_func(base_domain)
         technical_results.extend(details)
         total_score += score
 
-    # Anzeigename-Mismatch-Prüfung:
-    if from_header and from_domain and from_domain not in from_header:
-        technical_results.append(f"Anzeigename passt nicht zur Domain: {from_header} ≠ {from_domain}")
-        total_score += 10
+    # Authentifizierungs-Ergebnisse
+    auth_results = auth_results_header.lower()
+    if auth_results:
+        if 'spf=fail' in auth_results or 'spf=temperror' in auth_results:
+            total_score += SPF_FAIL
+            technical_results.append("SPF-Prüfung fehlgeschlagen (laut Authentication-Results).")
+        if 'dkim=fail' in auth_results or 'dkim=none' in auth_results:
+            total_score += DKIM_FAIL
+            technical_results.append("DKIM-Prüfung fehlgeschlagen (laut Authentication-Results).")
+        if 'dmarc=fail' in auth_results or 'dmarc=none' in auth_results:
+            total_score += DMARC_FAIL
+            technical_results.append("DMARC-Prüfung fehlgeschlagen (laut Authentication-Results).")
 
-    # Den akkumulierten numerischen Score nutzen:
-    score = total_score
+    # Anzeigename-Mismatch
+    brand = base_domain.split('.')[0]
+    if display_name and brand not in display_name.lower():
+        total_score += DISPLAY_NAME_MISMATCH
+        technical_results.append(f"Anzeigename passt nicht zur Domain: {display_name} ≠ {base_domain}")
 
-    # Debug-Ausgabe: Überprüfe, was get_color_for_score zurückgibt
-    color_result = get_color_for_score(score)
-    print("DEBUG: analyze_email obtained get_color_for_score returns:", color_result)
-    color, color_hint = color_result
+    # URLs
+    urls = extract_urls(msg)
+    if urls:
+        score, details = check_links(urls, expected_domain=base_domain)
+        technical_results.extend(details)
+        total_score += score
+    else:
+        technical_results.append("Keine URLs im E-Mail-Inhalt gefunden.")
+
+    # Datenbank-Prüfung
+    if is_domain_known_phishing(base_domain):
+        technical_results.append(f"Domain {base_domain} ist in der Phishing-Datenbank vorhanden.")
+        final_score = 100
+    else:
+        final_score = min(total_score, 100)  # Score wird maximal 100
+
+    color, color_hint = get_color_for_score(final_score)
+
+    # Einfache Endanwender-Erklärung
+    why_message = get_enduser_explanation(final_score)
 
     return {
-        "phishing_probability": score,
+        "phishing_probability": final_score,
         "phishing_color": color,
         "phishing_hint": color_hint,
         "score_details": technical_results,
+        "why_message": why_message,                # einfache Erläuterung
+        "raw_headers": raw_headers,                # vollständiger Header
+        "authentication_results_header": auth_results_header,
+        "dkim_signature_header": dkim_signature_header,
+        "received_spf_header": received_spf_header,
+
         "From": from_header,
         "Subject": msg.get("Subject", ""),
         "To": msg.get("To", ""),
         "Date": msg.get("Date", ""),
-        "Reply-To": msg.get("Reply-To", "")
+        "Reply-To": msg.get("Reply-To", ""),
+        "URLs": urls
     }
-
-def extract_domain_from_header(header):
-    import re
-    match = re.search(r'@([\w\.-]+)', header or "")
-    return match.group(1).lower() if match else ""
 
 @app.route('/', methods=['GET', 'POST'])
 def index():

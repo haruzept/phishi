@@ -2,7 +2,6 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ergebnis der E-Mail-Analyse</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
@@ -18,13 +17,11 @@
       font-family: monospace; background: #eee; padding: 2px 6px;
       border-radius: 4px; display: inline-block;
     }
-  </style>
-  <script>
-    function toggleDetails() {
-      const section = document.getElementById("details");
-      section.style.display = section.style.display === "none" ? "block" : "none";
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
-  </script>
+  </style>
 </head>
 <body>
   <div class="container py-5">
@@ -33,7 +30,10 @@
     </div>
 
     {% set score = analysis['phishing_probability'] %}
-    {% if score < 20 %}
+    {% if score <= 0 %}
+      {% set farbe = 'green' %}
+      {% set text = 'Diese E-Mail erscheint unbedenklich.' %}
+    {% elif score < 20 %}
       {% set farbe = 'green' %}
       {% set text = 'Diese E-Mail erscheint unbedenklich.' %}
     {% elif score <= 69 %}
@@ -51,36 +51,18 @@
     </div>
 
     <div class="text-center fs-4 fw-bold mb-3">{{ score }} %</div>
-    <div class="alert alert-{{ farbe }} text-center"><strong>{{ text }}</strong></div>
+    <div class="alert alert-{{ farbe }} text-center">
+      <strong>{{ text }}</strong>
+    </div>
 
+    <!-- Nicht-technische Erklärung für Endanwender -->
     <div class="card shadow-sm mb-4">
       <div class="card-header">Warum diese Bewertung?</div>
       <div class="card-body">
         <ul class="mb-0">
-          {% set user_reasons_displayed = false %}
-          {% for detail in analysis['score_details'] %}
-            {% if 'Anzeigename' in detail %}
-              <li>{{ detail }}</li>
-              {% set user_reasons_displayed = true %}
-            {% endif %}
+          {% for explanation in analysis['why_message'] %}
+            <li>{{ explanation }}</li>
           {% endfor %}
-          {% for detail in analysis['score_details'] %}
-            {% if 'Antwortadresse' in detail or 'widerspricht' in detail %}
-              <li>{{ detail }}</li>
-              {% set user_reasons_displayed = true %}
-            {% endif %}
-          {% endfor %}
-          {% set phishing_hit = namespace(found = false) %}
-          {% for detail in analysis['score_details'] %}
-            {% if 'Phishing-Datenbank' in detail and not phishing_hit.found %}
-              <li>{{ detail }}</li>
-              {% set phishing_hit.found = true %}
-              {% set user_reasons_displayed = true %}
-            {% endif %}
-          {% endfor %}
-          {% if not user_reasons_displayed %}
-            <li>Bitte prüfen Sie die E-Mail besonders sorgfältig. Weitere technische Faktoren und Merkmale entnehmen Sie bitte unter „Technische Details“.</li>
-          {% endif %}
         </ul>
       </div>
     </div>
@@ -89,22 +71,46 @@
       <button class="btn btn-primary" onclick="toggleDetails()">Technische Details anzeigen/verbergen</button>
     </div>
 
+    <script>
+      function toggleDetails() {
+        const section = document.getElementById("details");
+        section.style.display = (section.style.display === "none") ? "block" : "none";
+      }
+    </script>
+
     <div class="card shadow-sm mb-5" id="details" style="display: none">
       <div class="card-body">
         <h5 class="card-title">Technische Details</h5>
-        <p><strong>Subject:</strong> {{ analysis['Subject'] }}</p>
-        <p><strong>From:</strong> {{ analysis['From'] }}</p>
-        <p><strong>To:</strong> {{ analysis['To'] }}</p>
-        <p><strong>Date:</strong> {{ analysis['Date'] }}</p>
-        <p><strong>Reply-To:</strong> {{ analysis['Reply-To'] }}</p>
-        <pre>{{ analysis['Received'] }}</pre>
+        
+        <!-- Kurze Zusammenfassung der Header-Infos -->
+        <p><strong>DKIM-Signature:</strong> {{ analysis['dkim_signature_header'] }}</p>
+        <p><strong>Authentication-Results:</strong><br>
+           <pre>{{ analysis['authentication_results_header'] }}</pre></p>
+        <p><strong>Received-SPF:</strong> {{ analysis['received_spf_header'] }}</p>
+
+        <hr>
+        <h6>Vollständige Header:</h6>
+        <pre>{{ analysis['raw_headers'] }}</pre>
+
+        <h6>Absenderdaten:</h6>
+        <ul>
+          <li><strong>Subject:</strong> {{ analysis['Subject'] }}</li>
+          <li><strong>From:</strong> {{ analysis['From'] }}</li>
+          <li><strong>To:</strong> {{ analysis['To'] }}</li>
+          <li><strong>Date:</strong> {{ analysis['Date'] }}</li>
+          <li><strong>Reply-To:</strong> {{ analysis['Reply-To'] }}</li>
+        </ul>
 
         <h6>Gefundene URLs:</h6>
-        <ul>
-          {% for url in analysis['URLs'] %}
-            <li>{{ url }}</li>
-          {% endfor %}
-        </ul>
+        {% if analysis['URLs'] %}
+          <ul>
+            {% for url in analysis['URLs'] %}
+              <li>{{ url }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>Keine Links in dieser E-Mail.</p>
+        {% endif %}
 
         <h6>Technische Bewertungen:</h6>
         <ul>
