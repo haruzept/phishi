@@ -1,8 +1,10 @@
-
 import dns.resolver
 import socket
 import re
-from score_weights import NO_A_RECORD, NO_MX, PUNYCODE_DOMAIN, TLD_SUSPECT
+NO_A_RECORD = 10
+NO_MX = 15
+PUNYCODE_DOMAIN = 30
+TLD_SUSPECT = 15
 
 def is_punycode(domain):
     return domain.startswith("xn--")

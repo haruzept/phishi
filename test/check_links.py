@@ -1,6 +1,6 @@
-
 import re
-from score_weights import LINK_CONTAINS_IP, FREEMAIL_BUSINESS
+LINK_CONTAINS_IP = 25
+FREEMAIL_BUSINESS = 20
 
 FREEMAIL_DOMAINS = {
     "gmail.com", "gmx.net", "web.de", "hotmail.com", "yahoo.com", "outlook.com", "live.com", "aol.com"

@@ -1,24 +1,30 @@
+# score_weights.py – Bewertungskriterien und Gewichtung
 
-# Bewertungskonfiguration für Phishing-Analyse
+DKIM_FAIL = 25
+SPF_FAIL = 25
+DMARC_FAIL = 25
 
-# Positivfaktoren (ziehen Punkte AB = gut)
-SPF_PASS = -5
-DKIM_PASS = -5
-DMARC_PASS = -5
-SPF_STRICT = -5     # SPF-Hardfail via '-all'
-DMARC_POLICY_REJECT = -5
+NO_A_RECORD = 20
+NO_MX = 25
 
-# Negativfaktoren (erhöhen Punkte = verdächtig)
-SPF_FAIL = +10
-DKIM_FAIL = +10
-DMARC_FAIL = +10
-NO_MX = +15
-NO_A_RECORD = +20
-DOMAIN_YOUNG_30 = +30
-DOMAIN_YOUNG_90 = +15
-TLD_SUSPECT = +15
-LINK_CONTAINS_IP = +25
-DISPLAYNAME_MISMATCH = +30
-REPLYTO_MISMATCH = +25
-FREEMAIL_BUSINESS = +20
-PUNYCODE_DOMAIN = +30
+FREEMAIL_REPLY_TO = 15
+DISPLAY_NAME_MISMATCH = 10
+PUNYCODE_DOMAIN = 10
+TLD_SUSPECT = 10
+LINK_CONTAINS_IP = 15
+SUSPICIOUS_LINK_TEXT = 10
+
+WHOIS_TOO_NEW = 20
+WHOIS_NOT_FOUND = 25
+
+def get_color_for_score(score: int) -> tuple[str, str]:
+    if score >= 60:
+        ret = ("Rot", "Diese E-Mail ist hochverdächtig.")
+    elif score >= 25:
+        ret = ("Orange", "Diese E-Mail enthält Auffälligkeiten. Bitte prüfen Sie sie sorgfältig.")
+    else:
+        ret = ("Grün", "Diese E-Mail erscheint unbedenklich.")
+
+    # Debug-Ausgabe zur Kontrolle
+    print("DEBUG: get_color_for_score returns", ret)
+    return ret
