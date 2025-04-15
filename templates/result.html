@@ -38,10 +38,10 @@
       {% set text = 'Diese E-Mail erscheint unbedenklich.' %}
     {% elif score <= 69 %}
       {% set farbe = 'yellow' %}
-      {% set text = 'Diese E-Mail enthält Auffälligkeiten. Bitte prüfen Sie sie sorgfältig.' %}
+      {% set text = 'Diese E-Mail enthält Auffälligkeiten. Bitte prüfen Sie sie sorgfältig oder wenden Sie sich an Ihre IT-Abteilung.' %}
     {% else %}
       {% set farbe = 'red' %}
-      {% set text = 'Diese E-Mail weist starke Merkmale für Phishing auf!' %}
+      {% set text = 'Diese E-Mail weist starke Merkmale für Phishing auf! Wenden Sie sich ggf. an Ihre IT-Abteilung.' %}
     {% endif %}
 
     <div class="d-flex justify-content-center mb-3">
