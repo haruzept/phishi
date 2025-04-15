@@ -56,8 +56,7 @@ def extract_urls(msg):
 
 def get_headers_str(msg):
     """
-    Gibt alle Header des E-Mail-Objekts als Text-String zurück
-    (Name: Wert).
+    Gibt alle Header des E-Mail-Objekts als Text-String zurück (Name: Wert).
     """
     headers_str = ""
     for name, value in msg.items():
@@ -81,7 +80,7 @@ def is_domain_known_phishing(domain):
 
 def get_enduser_explanation(score):
     """
-    Erzeugt eine möglichst einfache Erklärung (Liste von Sätzen) für den Endanwender,
+    Erzeugt eine einfache Erklärung (Liste von Sätzen) für den Endanwender,
     abhängig vom ermittelten Score.
     """
     if score == 0:
@@ -91,13 +90,13 @@ def get_enduser_explanation(score):
         ]
     elif score < 25:
         return [
-            "Wir haben nur wenige (möglicherweise harmlose) Auffälligkeiten gefunden.",
-            "Die E-Mail ist wahrscheinlich echt, aber bleiben Sie wachsam."
+            "Es wurden nur wenige (möglicherweise harmlose) Auffälligkeiten gefunden.",
+            "Die E-Mail wirkt wahrscheinlich echt, dennoch sollte man vorsichtig bleiben."
         ]
     elif score < 60:
         return [
             "Einige Indizien deuten auf mögliche Manipulation hin.",
-            "Wir empfehlen Ihnen, die E-Mail genauer zu prüfen."
+            "Wir empfehlen, die E-Mail genauer zu prüfen."
         ]
     else:
         return [
@@ -126,7 +125,7 @@ def analyze_email(msg):
         technical_results.extend(details)
         total_score += score
 
-    # Authentifizierungs-Ergebnisse
+    # Authentifizierungs-Ergebnisse auswerten
     auth_results = auth_results_header.lower()
     if auth_results:
         if 'spf=fail' in auth_results or 'spf=temperror' in auth_results:
@@ -139,31 +138,29 @@ def analyze_email(msg):
             total_score += DMARC_FAIL
             technical_results.append("DMARC-Prüfung fehlgeschlagen (laut Authentication-Results).")
 
-    # Anzeigename-Mismatch
+    # Anzeigename-Mismatch: Prüfe, ob das Kernstichwort der Basisdomain im Anzeigenamen vorhanden ist.
     brand = base_domain.split('.')[0]
     if display_name and brand not in display_name.lower():
         total_score += DISPLAY_NAME_MISMATCH
         technical_results.append(f"Anzeigename passt nicht zur Domain: {display_name} ≠ {base_domain}")
 
-    # URLs
+    # URLs aus dem E-Mail-Inhalt extrahieren und prüfen
     urls = extract_urls(msg)
     if urls:
         score, details = check_links(urls, expected_domain=base_domain)
-        technical_results.extend(details)
         total_score += score
+        technical_results.extend(details)
     else:
         technical_results.append("Keine URLs im E-Mail-Inhalt gefunden.")
 
-    # Datenbank-Prüfung
+    # Datenbank-Prüfung: Wird die Basisdomain als Phishing-Domain erkannt, wird der Score auf 100 gesetzt.
     if is_domain_known_phishing(base_domain):
         technical_results.append(f"Domain {base_domain} ist in der Phishing-Datenbank vorhanden.")
         final_score = 100
     else:
-        final_score = min(total_score, 100)  # Score wird maximal 100
+        final_score = min(total_score, 100)  # Score maximal 100
 
     color, color_hint = get_color_for_score(final_score)
-
-    # Einfache Endanwender-Erklärung
     why_message = get_enduser_explanation(final_score)
 
     return {
@@ -171,12 +168,11 @@ def analyze_email(msg):
         "phishing_color": color,
         "phishing_hint": color_hint,
         "score_details": technical_results,
-        "why_message": why_message,                # einfache Erläuterung
-        "raw_headers": raw_headers,                # vollständiger Header
+        "why_message": why_message,
+        "raw_headers": raw_headers,
         "authentication_results_header": auth_results_header,
         "dkim_signature_header": dkim_signature_header,
         "received_spf_header": received_spf_header,
-
         "From": from_header,
         "Subject": msg.get("Subject", ""),
         "To": msg.get("To", ""),
@@ -207,6 +203,13 @@ def index():
                 msg = BytesParser(policy=policy.default).parse(f)
 
             analysis_result = analyze_email(msg)
+
+            # Lösche die hochgeladene Datei nach der Analyse
+            try:
+                os.remove(filepath)
+            except Exception as e:
+                print("Fehler beim Löschen der Datei:", e)
+
             return render_template('result.html', analysis=analysis_result)
 
         flash("Ungültiger Dateityp. Bitte eine .eml-Datei hochladen.")
