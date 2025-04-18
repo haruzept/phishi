@@ -11,6 +11,7 @@ import re
 import sqlite3
 import redis
 from kombu.exceptions import OperationalError
+from celery.exceptions import TimeoutError as CeleryTimeoutError
 
 from celery_app import celery
 from tasks import dns_check_task, whois_check_task
@@ -43,7 +44,6 @@ def extract_domain(email_address):
 
 def extract_urls(msg):
     urls = []
-    # Correct regex with proper escaping: double quotes and single quotes inside character class
     url_regex = re.compile(r'https?://[^\s"\'<>]+')
     if msg.is_multipart():
         for part in msg.walk():
@@ -119,15 +119,15 @@ def index():
         display_name, email_address = parseaddr(from_header)
         base_domain = get_base_domain(extract_domain(email_address))
 
-        # Celery async tasks with fallback
+        # Celery async tasks with fallback on connection errors and timeouts
         try:
             dns_async = dns_check_task.delay(base_domain)
             whois_async = whois_check_task.delay(base_domain)
             dns_score, dns_details = dns_async.get(timeout=10)
             whois_score, whois_details = whois_async.get(timeout=10)
             logging.info("Celery tasks executed successfully")
-        except (redis.exceptions.ConnectionError, OperationalError) as e:
-            logging.warning("Redis/Celery not available (%s), falling back to sync execution", e)
+        except (redis.exceptions.ConnectionError, OperationalError, CeleryTimeoutError) as e:
+            logging.warning("Async tasks failed (%s), falling back to sync execution", e)
             from check_dns import check_dns
             from check_whois import check_domain_age
             dns_score, dns_details = check_dns(base_domain)
@@ -192,7 +192,6 @@ def index():
             'URLs': urls
         }
 
-        # Clean up upload
         try:
             os.remove(filepath)
         except OSError as e:
