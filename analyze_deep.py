@@ -43,8 +43,8 @@ def extract_domain(email_address):
 
 def extract_urls(msg):
     urls = []
-    # Corrected regex string with double quotes surrounding and proper escaping
-    url_regex = re.compile(r"https?://[^\s"'<>]+")
+    # Correct regex with proper escaping: double quotes and single quotes inside character class
+    url_regex = re.compile(r'https?://[^\s"\'<>]+')
     if msg.is_multipart():
         for part in msg.walk():
             if part.get_content_type() in ['text/plain', 'text/html']:
