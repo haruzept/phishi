@@ -1,0 +1,8 @@
+Flask
+celery
+redis
+pyyaml
+bleach
+dkimpy
+pydmarc
+cryptography

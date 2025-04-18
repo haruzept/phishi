@@ -1,0 +1,29 @@
+weights:
+  dkim_fail: 25
+  spf_fail: 20
+  dmarc_fail: 20
+  no_a_record: 10
+  no_mx: 15
+  punycode_domain: 30
+  tld_suspect: 15
+  link_contains_ip: 25
+  url_shortener: 10
+  brand_impersonation: 15
+  whois_too_new: 10
+  whois_not_found: 10
+thresholds:
+  green: 25
+  orange: 60
+  red: 100
+brands:
+  - paypal
+  - amazon
+  - google
+  - apple
+  - microsoft
+url_shorteners:
+  - bit.ly
+  - tinyurl
+  - goo.gl
+  - t.co
+  - ow.ly
