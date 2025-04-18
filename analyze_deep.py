@@ -1,4 +1,5 @@
 import os
+import logging
 from flask import Flask, render_template, request, flash
 from werkzeug.utils import secure_filename
 from email import policy
@@ -11,6 +12,9 @@ from check_dns import check_dns
 from check_whois import check_domain_age
 from score_weights import get_color_for_score, DKIM_FAIL, SPF_FAIL, DMARC_FAIL, DISPLAY_NAME_MISMATCH
 from check_links import check_links  # benutze die aktuelle Version ohne Companion-Domains
+
+# Konfiguriere Logging (ohne sensible Daten)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'eml'}
@@ -45,7 +49,7 @@ def extract_urls(msg):
                         text = payload.decode(charset, errors='replace')
                         urls.extend(url_regex.findall(text))
                 except Exception as e:
-                    print("Error decoding part:", e)
+                    logging.error("Error decoding part: %s", e)
     else:
         payload = msg.get_payload(decode=True)
         if payload:
@@ -75,7 +79,7 @@ def is_domain_known_phishing(domain):
         conn.close()
         return result is not None
     except Exception as e:
-        print("Fehler beim Zugriff auf die Phishing-Datenbank:", e)
+        logging.error("Fehler beim Zugriff auf die Phishing-Datenbank: %s", e)
         return False
 
 def get_enduser_explanation(score):
@@ -144,6 +148,13 @@ def analyze_email(msg):
         total_score += DISPLAY_NAME_MISMATCH
         technical_results.append(f"Anzeigename passt nicht zur Domain: {display_name} ≠ {base_domain}")
 
+    # Zusätzliche Prüfung: Brand-Impersonation
+    popular_brands = ["paypal", "amazon", "google", "apple", "microsoft"]
+    for br in popular_brands:
+        if br in display_name.lower() and br not in from_domain.lower():
+            total_score += 15  # zusätzlicher Score für offensichtliche Marken-Mismatch
+            technical_results.append(f"Anzeigename enthält bekannte Marke '{br}', passt aber nicht zur tatsächlichen Domain.")
+
     # URLs aus dem E-Mail-Inhalt extrahieren und prüfen
     urls = extract_urls(msg)
     if urls:
@@ -162,6 +173,8 @@ def analyze_email(msg):
 
     color, color_hint = get_color_for_score(final_score)
     why_message = get_enduser_explanation(final_score)
+
+    logging.info("Analyse abgeschlossen: Score=%d, Domain=%s", final_score, base_domain)
 
     return {
         "phishing_probability": final_score,
@@ -204,11 +217,11 @@ def index():
 
             analysis_result = analyze_email(msg)
 
-            # Lösche die hochgeladene Datei nach der Analyse
+            # DSGVO-Konform: Lösche die hochgeladene Datei nach der Analyse sofort
             try:
                 os.remove(filepath)
             except Exception as e:
-                print("Fehler beim Löschen der Datei:", e)
+                logging.error("Fehler beim Löschen der Datei: %s", e)
 
             return render_template('result.html', analysis=analysis_result)
 

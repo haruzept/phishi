@@ -1,5 +1,18 @@
 import subprocess
 import re
+import time
+
+_whois_cache = {}
+CACHE_TIMEOUT = 600  # Sekunden
+
+def get_cached(key):
+    entry = _whois_cache.get(key)
+    if entry and time.time() - entry[1] < CACHE_TIMEOUT:
+        return entry[0]
+    return None
+
+def set_cached(key, value):
+    _whois_cache[key] = (value, time.time())
 
 def extract_tld(domain):
     parts = domain.split('.')
@@ -8,9 +21,14 @@ def extract_tld(domain):
     return domain
 
 def check_domain_age(domain):
+    tld = extract_tld(domain)
+    cache_key = f"whois_{tld}"
+    cached_result = get_cached(cache_key)
+    if cached_result is not None:
+        return cached_result
+
     technical_details = []
     score = 0
-    tld = extract_tld(domain)
 
     try:
         result = subprocess.run(["whois", tld], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=5)
@@ -37,4 +55,6 @@ def check_domain_age(domain):
         technical_details.append(f"Fehler bei der Whois-Abfrage für {tld}: {e}")
         score += 10
 
-    return score, technical_details
+    result = (score, technical_details)
+    set_cached(cache_key, result)
+    return result
