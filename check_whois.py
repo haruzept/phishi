@@ -3,6 +3,9 @@ import re
 import pickle
 import time
 import shutil
+import os
+# VENV: sicherstellen, dass wir das System-whois finden
+os.environ["PATH"] += os.pathsep + "/usr/local/bin" + os.pathsep + "/usr/bin"
 import logging
 from config import config
 
@@ -16,7 +19,7 @@ except Exception:
 CACHE_TIMEOUT = 600  # Sekunden
 
 # Finde den Pfad zur whois-Binary
-WHOIS_BINARY = shutil.which('whois') or '/usr/bin/whois'
+WHOIS_BINARY = shutil.which('whois')
 
 # Logging
 logger = logging.getLogger(__name__)
