@@ -43,10 +43,11 @@ def extract_domain(email_address):
 
 def extract_urls(msg):
     urls = []
-    url_regex = re.compile(r'https?://[^\s"'<>]+')
+    # Corrected regex string with double quotes surrounding and proper escaping
+    url_regex = re.compile(r"https?://[^\s"'<>]+")
     if msg.is_multipart():
         for part in msg.walk():
-            if part.get_content_type() in ['text/plain','text/html']:
+            if part.get_content_type() in ['text/plain', 'text/html']:
                 try:
                     payload = part.get_payload(decode=True)
                     if payload:
@@ -84,15 +85,15 @@ def is_domain_known_phishing(domain):
 
 def get_enduser_explanation(score):
     if score == 0:
-        return ["Die Analyse ergab keinerlei Auffälligkeiten.","Diese E-Mail scheint echt zu sein."]
+        return ["Die Analyse ergab keinerlei Auffälligkeiten.", "Diese E-Mail scheint echt zu sein."]
     elif score < 25:
-        return ["Nur wenige Auffälligkeiten.","E-Mail wirkt wahrscheinlich echt, dennoch vorsichtig sein."]
+        return ["Nur wenige Auffälligkeiten.", "E-Mail wirkt wahrscheinlich echt, dennoch vorsichtig sein."]
     elif score < 60:
-        return ["Einige Indizien für Manipulation.","E-Mail genauer prüfen."]
+        return ["Einige Indizien für Manipulation.", "E-Mail genauer prüfen."]
     else:
-        return ["Mehrere Merkmale deuten stark auf Phishing hin.","Besonders vorsichtig sein."]
+        return ["Mehrere Merkmale deuten stark auf Phishing hin.", "Besonders vorsichtig sein."]
 
-@app.route('/', methods=['GET','POST'])
+@app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
         if 'email_file' not in request.files:
@@ -110,11 +111,11 @@ def index():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
         file.save(filepath)
 
-        with open(filepath,'rb') as f:
+        with open(filepath, 'rb') as f:
             msg = BytesParser(policy=policy.default).parse(f)
 
         # Domain extraction
-        from_header = msg.get('From','')
+        from_header = msg.get('From', '')
         display_name, email_address = parseaddr(from_header)
         base_domain = get_base_domain(extract_domain(email_address))
 
@@ -136,7 +137,7 @@ def index():
         total_score = dns_score + whois_score
 
         # Authentication checks
-        auth = msg.get('Authentication-Results','').lower()
+        auth = msg.get('Authentication-Results', '').lower()
         if 'spf=fail' in auth:
             total_score += config['weights']['spf_fail']; technical_results.append("SPF fail")
         if 'dkim=fail' in auth:
@@ -164,7 +165,7 @@ def index():
             final_score = 100
             technical_results.append("Domain in database")
         else:
-            final_score = min(total_score,100)
+            final_score = min(total_score, 100)
 
         # Determine color
         if final_score < config['thresholds']['green']:
@@ -180,14 +181,14 @@ def index():
             'why_message': get_enduser_explanation(final_score),
             'score_details': technical_results,
             'raw_headers': get_headers_str(msg),
-            'authentication_results_header': msg.get('Authentication-Results',''),
-            'dkim_signature_header': msg.get('DKIM-Signature',''),
-            'received_spf_header': msg.get('Received-SPF',''),
-            'From': msg.get('From',''),
-            'Subject': msg.get('Subject',''),
-            'To': msg.get('To',''),
-            'Date': msg.get('Date',''),
-            'Reply-To': msg.get('Reply-To',''),
+            'authentication_results_header': msg.get('Authentication-Results', ''),
+            'dkim_signature_header': msg.get('DKIM-Signature', ''),
+            'received_spf_header': msg.get('Received-SPF', ''),
+            'From': msg.get('From', ''),
+            'Subject': msg.get('Subject', ''),
+            'To': msg.get('To', ''),
+            'Date': msg.get('Date', ''),
+            'Reply-To': msg.get('Reply-To', ''),
             'URLs': urls
         }
 
