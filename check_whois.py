@@ -4,6 +4,7 @@ import subprocess
 import re
 import pickle
 import time
+import shutil
 from config import config
 
 # Versuche Redis zu importieren, sonst kein Cache
@@ -44,6 +45,7 @@ def extract_tld(domain):
 def check_domain_age(domain):
     tld = extract_tld(domain)
     key = f"whois:{tld}"
+    # Cache prüfen
     cached = get_cached(key)
     if cached:
         return cached
@@ -51,9 +53,15 @@ def check_domain_age(domain):
     score = 0
     details = []
 
+    # Prüfe, ob whois installiert ist
+    whois_cmd = shutil.which("whois")
+    if not whois_cmd:
+        details.append("whois-Kommando nicht gefunden, überspringe Whois-Abfrage.")
+        return (score, details)
+
     try:
         output = subprocess.run(
-            ["whois", tld],
+            [whois_cmd, tld],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -79,6 +87,8 @@ def check_domain_age(domain):
     except subprocess.TimeoutExpired:
         score += config['weights']['whois_not_found']
         details.append(f"Whois-Abfrage für {tld} abgebrochen (Timeout).")
+    except FileNotFoundError:
+        details.append("whois-Kommando nicht gefunden (Dateifehler).")
     except Exception as e:
         score += config['weights']['whois_not_found']
         details.append(f"Fehler bei der Whois-Abfrage für {tld}: {e}")
