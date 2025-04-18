@@ -1,10 +1,9 @@
-# check_whois.py
-
 import subprocess
 import re
 import pickle
 import time
 import shutil
+import logging
 from config import config
 
 # Versuche Redis zu importieren, sonst kein Cache
@@ -15,6 +14,12 @@ except Exception:
     _cache = None
 
 CACHE_TIMEOUT = 600  # Sekunden
+
+# Finde den Pfad zur whois-Binary
+WHOIS_BINARY = shutil.which('whois') or '/usr/bin/whois'
+
+# Logging
+logger = logging.getLogger(__name__)
 
 
 def get_cached(key):
@@ -56,18 +61,16 @@ def check_domain_age(domain):
     score = 0
     details = []
 
-    # Finde die whois-Binärdatei
-    whois_bin = shutil.which('whois') or '/usr/bin/whois'
+    # Prüfe, ob whois-Binary existiert
     if not shutil.which('whois'):
-        details.append(f"Whois-Binary nicht gefunden ({whois_bin}).")
         score += config['weights']['whois_not_found']
-        result = (score, details)
-        set_cached(key, result)
-        return result
+        details.append("Whois-Tool nicht gefunden, kann Alter nicht bestimmen.")
+        return score, details
 
     try:
+        # Führe whois mit absolutem Pfad aus
         proc = subprocess.run(
-            [whois_bin, tld],
+            [WHOIS_BINARY, tld],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -75,7 +78,6 @@ def check_domain_age(domain):
         )
         output = proc.stdout.lower()
 
-        # DE-Domain: Changed-Datum
         if tld.endswith(".de"):
             match = re.search(r"changed:\s*(\d{4}-\d{2}-\d{2})", output)
             if match:
@@ -84,7 +86,6 @@ def check_domain_age(domain):
                 score += config['weights']['whois_too_new']
                 details.append(f"Whois-Abfrage: Kein Changed-Datum für {tld} verfügbar.")
         else:
-            # internationale Domains: Creation Date
             match = re.search(r"creation date:\s*(\d{4}-\d{2}-\d{2})", output)
             if match:
                 details.append(f"Whois-Abfrage: Creation Date am {match.group(1)}")
@@ -95,6 +96,9 @@ def check_domain_age(domain):
     except subprocess.TimeoutExpired:
         score += config['weights']['whois_not_found']
         details.append(f"Whois-Abfrage für {tld} abgebrochen (Timeout).")
+    except FileNotFoundError:
+        score += config['weights']['whois_not_found']
+        details.append("Whois-Binary nicht gefunden, bitte installieren.")
     except Exception as e:
         score += config['weights']['whois_not_found']
         details.append(f"Fehler bei der Whois-Abfrage für {tld}: {e}")
