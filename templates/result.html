@@ -1,4 +1,3 @@
-<!-- templates/result.html -->
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -31,13 +30,10 @@
     </div>
 
     {% set score = analysis['phishing_probability'] %}
-    {% if score <= 0 %}
+    {% if score < 25 %}
       {% set farbe = 'green' %}
       {% set text = 'Diese E-Mail erscheint unbedenklich.' %}
-    {% elif score < 20 %}
-      {% set farbe = 'green' %}
-      {% set text = 'Diese E-Mail erscheint unbedenklich.' %}
-    {% elif score <= 69 %}
+    {% elif score < 60 %}
       {% set farbe = 'yellow' %}
       {% set text = 'Diese E-Mail enthält Auffälligkeiten. Bitte prüfen Sie sie sorgfältig oder wenden Sie sich an Ihre IT-Abteilung.' %}
     {% else %}
@@ -56,6 +52,7 @@
       <strong>{{ text }}</strong>
     </div>
 
+    <!-- Warum -->
     <div class="card shadow-sm mb-4">
       <div class="card-header">Warum diese Bewertung?</div>
       <div class="card-body">
@@ -63,31 +60,36 @@
           {% for explanation in analysis['why_message'] %}
             <li>{{ explanation }}</li>
           {% endfor %}
+          {% for detail in analysis['score_details'] %}
+            <li>{{ detail }}</li>
+          {% endfor %}
         </ul>
       </div>
     </div>
 
+    <!-- Technische Details -->
     <div class="text-center mb-3">
       <button class="btn btn-primary" onclick="toggleDetails()">Technische Details anzeigen/verbergen</button>
     </div>
-
     <script>
       function toggleDetails() {
         const section = document.getElementById("details");
         section.style.display = (section.style.display === "none") ? "block" : "none";
       }
     </script>
-
     <div class="card shadow-sm mb-5" id="details" style="display: none">
       <div class="card-body">
         <h5 class="card-title">Technische Details</h5>
+        
         <p><strong>DKIM-Signature:</strong> {{ analysis['dkim_signature_header'] }}</p>
         <p><strong>Authentication-Results:</strong><br>
            <pre>{{ analysis['authentication_results_header'] }}</pre></p>
         <p><strong>Received-SPF:</strong> {{ analysis['received_spf_header'] }}</p>
+
         <hr>
         <h6>Vollständige Header:</h6>
         <pre>{{ analysis['raw_headers'] }}</pre>
+
         <h6>Absenderdaten:</h6>
         <ul>
           <li><strong>Subject:</strong> {{ analysis['Subject'] }}</li>
@@ -96,14 +98,24 @@
           <li><strong>Date:</strong> {{ analysis['Date'] }}</li>
           <li><strong>Reply-To:</strong> {{ analysis['Reply-To'] }}</li>
         </ul>
+
         <h6>Gefundene URLs:</h6>
         {% if analysis['URLs'] %}
-          <ul>{% for url in analysis['URLs'] %}<li>{{ url }}</li>{% endfor %}</ul>
+          <ul>
+            {% for url in analysis['URLs'] %}
+              <li>{{ url }}</li>
+            {% endfor %}
+          </ul>
         {% else %}
           <p>Keine Links in dieser E-Mail.</p>
         {% endif %}
+
         <h6>Technische Bewertungen:</h6>
-        <ul>{% for detail in analysis['score_details'] %}<li>{{ detail }}</li>{% endfor %}</ul>
+        <ul>
+          {% for detail in analysis['score_details'] %}
+            <li>{{ detail }}</li>
+          {% endfor %}
+        </ul>
       </div>
     </div>
 
