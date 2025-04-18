@@ -9,16 +9,18 @@ from email.parser import BytesParser
 from email.utils import parseaddr
 import re
 import sqlite3
+import redis
+from kombu.exceptions import OperationalError
 
 from celery_app import celery
 from tasks import dns_check_task, whois_check_task
 from check_links import check_links
 
-# Logging
+# Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 # Load configuration
-with open('config.yaml') as f:
+with open('config.yaml', 'r', encoding='utf-8') as f:
     config = yaml.safe_load(f)
 
 UPLOAD_FOLDER = 'uploads'
@@ -41,7 +43,7 @@ def extract_domain(email_address):
 
 def extract_urls(msg):
     urls = []
-    url_regex = re.compile(r'https?://[^\s"\'<>]+')
+    url_regex = re.compile(r'https?://[^\s"'<>]+')
     if msg.is_multipart():
         for part in msg.walk():
             if part.get_content_type() in ['text/plain','text/html']:
@@ -61,6 +63,12 @@ def extract_urls(msg):
 
 def sanitize(text):
     return bleach.clean(text)
+
+def get_headers_str(msg):
+    headers = ""
+    for name, value in msg.items():
+        headers += f"{name}: {value}\n"
+    return headers
 
 def is_domain_known_phishing(domain):
     try:
@@ -94,58 +102,104 @@ def index():
         if file.filename == '':
             flash("Keine Datei ausgewählt.")
             return render_template('index.html')
-        if file and allowed_file(file.filename):
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-            path = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
-            file.save(path)
-            with open(path,'rb') as f:
-                msg = BytesParser(policy=policy.default).parse(f)
-            # async tasks
-            from_header = msg.get('From','')
-            display_name, email_address = parseaddr(from_header)
-            base_domain = get_base_domain(extract_domain(email_address))
+        if not allowed_file(file.filename):
+            flash("Ungültiger Dateityp. Bitte eine .eml-Datei hochladen.")
+            return render_template('index.html')
+
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
+        file.save(filepath)
+
+        with open(filepath,'rb') as f:
+            msg = BytesParser(policy=policy.default).parse(f)
+
+        # Domain extraction
+        from_header = msg.get('From','')
+        display_name, email_address = parseaddr(from_header)
+        base_domain = get_base_domain(extract_domain(email_address))
+
+        # Celery async tasks with fallback
+        try:
             dns_async = dns_check_task.delay(base_domain)
             whois_async = whois_check_task.delay(base_domain)
             dns_score, dns_details = dns_async.get(timeout=10)
             whois_score, whois_details = whois_async.get(timeout=10)
-            tech = dns_details + whois_details
-            total = dns_score + whois_score
-            # auth
-            auth = msg.get('Authentication-Results','').lower()
-            if 'spf=fail' in auth:
-                total += config['weights']['spf_fail']; tech.append("SPF fail")
-            if 'dkim=fail' in auth:
-                total += config['weights']['dkim_fail']; tech.append("DKIM fail")
-            if 'dmarc=fail' in auth:
-                total += config['weights']['dmarc_fail']; tech.append("DMARC fail")
-            # brand
-            for br in config['brands']:
-                if br in display_name.lower() and br not in base_domain.lower():
-                    total += config['weights']['brand_impersonation']; tech.append(f"Brand mismatch {br}")
-            # links
-            urls = extract_urls(msg)
-            if urls:
-                l_score, l_det = check_links(urls, expected_domain=base_domain)
-                total += l_score; tech += l_det
-            else:
-                tech.append("Keine URLs gefunden")
-            if is_domain_known_phishing(base_domain):
-                score = 100; tech.append("Domain in DB")
-            else:
-                score = min(total,100)
-            color = 'green' if score < config['thresholds']['green'] else ('orange' if score < config['thresholds']['orange'] else 'red')
-            result = {
-                'phishing_probability': score,
-                'color': color,
-                'explanations': get_enduser_explanation(score),
-                'tech': tech,
-                'headers': sanitize(str(msg.items())),
-                'urls': urls
-            }
-            os.remove(path)
-            return render_template('result.html', res=result)
-        flash("Ungültiger Typ"); return render_template('index.html')
+            logging.info("Celery tasks executed successfully")
+        except (redis.exceptions.ConnectionError, OperationalError) as e:
+            logging.warning("Redis/Celery not available (%s), falling back to sync execution", e)
+            from check_dns import check_dns
+            from check_whois import check_domain_age
+            dns_score, dns_details = check_dns(base_domain)
+            whois_score, whois_details = check_domain_age(base_domain)
+
+        technical_results = dns_details + whois_details
+        total_score = dns_score + whois_score
+
+        # Authentication checks
+        auth = msg.get('Authentication-Results','').lower()
+        if 'spf=fail' in auth:
+            total_score += config['weights']['spf_fail']; technical_results.append("SPF fail")
+        if 'dkim=fail' in auth:
+            total_score += config['weights']['dkim_fail']; technical_results.append("DKIM fail")
+        if 'dmarc=fail' in auth:
+            total_score += config['weights']['dmarc_fail']; technical_results.append("DMARC fail")
+
+        # Brand impersonation
+        for br in config['brands']:
+            if br in display_name.lower() and br not in base_domain.lower():
+                total_score += config['weights']['brand_impersonation']
+                technical_results.append(f"Brand mismatch {br}")
+
+        # Link checks
+        urls = extract_urls(msg)
+        if urls:
+            link_score, link_details = check_links(urls, expected_domain=base_domain)
+            total_score += link_score
+            technical_results.extend(link_details)
+        else:
+            technical_results.append("Keine URLs gefunden")
+
+        # Database phishing domain
+        if is_domain_known_phishing(base_domain):
+            final_score = 100
+            technical_results.append("Domain in database")
+        else:
+            final_score = min(total_score,100)
+
+        # Determine color
+        if final_score < config['thresholds']['green']:
+            color = 'green'
+        elif final_score < config['thresholds']['orange']:
+            color = 'orange'
+        else:
+            color = 'red'
+
+        result = {
+            'phishing_probability': final_score,
+            'color': color,
+            'why_message': get_enduser_explanation(final_score),
+            'score_details': technical_results,
+            'raw_headers': get_headers_str(msg),
+            'authentication_results_header': msg.get('Authentication-Results',''),
+            'dkim_signature_header': msg.get('DKIM-Signature',''),
+            'received_spf_header': msg.get('Received-SPF',''),
+            'From': msg.get('From',''),
+            'Subject': msg.get('Subject',''),
+            'To': msg.get('To',''),
+            'Date': msg.get('Date',''),
+            'Reply-To': msg.get('Reply-To',''),
+            'URLs': urls
+        }
+
+        # Clean up upload
+        try:
+            os.remove(filepath)
+        except OSError as e:
+            logging.error("Error removing uploaded file: %s", e)
+
+        return render_template('result.html', analysis=result)
+
     return render_template('index.html')
 
-if __name__=='__main__':
+if __name__ == '__main__':
     app.run()

@@ -1,29 +1,116 @@
-<!DOCTYPE html><html lang="de"><head>
-  <meta charset="UTF-8"><title>Ergebnis</title>
+<!-- templates/result.html -->
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Ergebnis der E-Mail-Analyse</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.css" rel="stylesheet"/>
-  <style id="dark-mode-style" disabled>
-    body.dark-mode{background:#2e2e2e;color:#f5f5f5;}
+  <style>
+    body { background-color: #f8f9fa; }
+    .ampel-light {
+      width: 60px; height: 60px; border-radius: 50%; background-color: #ddd;
+      margin: 0 10px;
+    }
+    .green.active { background-color: #28a745; box-shadow: 0 0 15px #28a745; }
+    .yellow.active { background-color: #ffc107; box-shadow: 0 0 15px #ffc107; }
+    .red.active { background-color: #dc3545; box-shadow: 0 0 15px #dc3545; }
+    .data-box {
+      font-family: monospace; background: #eee; padding: 2px 6px;
+      border-radius: 4px; display: inline-block;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
   </style>
-</head><body>
+</head>
+<body>
   <div class="container py-5">
-    <div class="d-flex justify-content-between">
-      <h1>Ergebnis: {{ res.phishing_probability }}%</h1>
-      <button id="dark-mode-toggle" class="btn btn-secondary">Dark Mode</button>
+    <div class="text-center mb-4">
+      <h1 class="fw-bold">Ergebnis der E-Mail-Analyse</h1>
     </div>
-    <div>Farbe: <span class="badge bg-{{ res.color }}">{{ res.color }}</span></div>
-    <h3>Warum?</h3>
-    <ul>{% for e in res.explanations %}<li>{{ e }}</li>{% endfor %}</ul>
-    <h3>Technisch</h3>
-    <ul>{% for d in res.tech %}<li>{{ d }}</li>{% endfor %}</ul>
-    <h3>Header</h3>
-    <pre><code class="language-http">{{ res.headers }}</code></pre>
-    <h3>URLs</h3>
-    <ul>{% for u in res.urls %}<li>{{ u }}</li>{% endfor %}</ul>
+
+    {% set score = analysis['phishing_probability'] %}
+    {% if score <= 0 %}
+      {% set farbe = 'green' %}
+      {% set text = 'Diese E-Mail erscheint unbedenklich.' %}
+    {% elif score < 20 %}
+      {% set farbe = 'green' %}
+      {% set text = 'Diese E-Mail erscheint unbedenklich.' %}
+    {% elif score <= 69 %}
+      {% set farbe = 'yellow' %}
+      {% set text = 'Diese E-Mail enthält Auffälligkeiten. Bitte prüfen Sie sie sorgfältig oder wenden Sie sich an Ihre IT-Abteilung.' %}
+    {% else %}
+      {% set farbe = 'red' %}
+      {% set text = 'Diese E-Mail weist starke Merkmale für Phishing auf! Wenden Sie sich ggf. an Ihre IT-Abteilung.' %}
+    {% endif %}
+
+    <div class="d-flex justify-content-center mb-3">
+      <div class="ampel-light {% if farbe == 'red' %}red active{% endif %}"></div>
+      <div class="ampel-light {% if farbe == 'yellow' %}yellow active{% endif %}"></div>
+      <div class="ampel-light {% if farbe == 'green' %}green active{% endif %}"></div>
+    </div>
+
+    <div class="text-center fs-4 fw-bold mb-3">{{ score }} %</div>
+    <div class="alert alert-{{ farbe }} text-center">
+      <strong>{{ text }}</strong>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+      <div class="card-header">Warum diese Bewertung?</div>
+      <div class="card-body">
+        <ul class="mb-0">
+          {% for explanation in analysis['why_message'] %}
+            <li>{{ explanation }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <div class="text-center mb-3">
+      <button class="btn btn-primary" onclick="toggleDetails()">Technische Details anzeigen/verbergen</button>
+    </div>
+
+    <script>
+      function toggleDetails() {
+        const section = document.getElementById("details");
+        section.style.display = (section.style.display === "none") ? "block" : "none";
+      }
+    </script>
+
+    <div class="card shadow-sm mb-5" id="details" style="display: none">
+      <div class="card-body">
+        <h5 class="card-title">Technische Details</h5>
+        <p><strong>DKIM-Signature:</strong> {{ analysis['dkim_signature_header'] }}</p>
+        <p><strong>Authentication-Results:</strong><br>
+           <pre>{{ analysis['authentication_results_header'] }}</pre></p>
+        <p><strong>Received-SPF:</strong> {{ analysis['received_spf_header'] }}</p>
+        <hr>
+        <h6>Vollständige Header:</h6>
+        <pre>{{ analysis['raw_headers'] }}</pre>
+        <h6>Absenderdaten:</h6>
+        <ul>
+          <li><strong>Subject:</strong> {{ analysis['Subject'] }}</li>
+          <li><strong>From:</strong> {{ analysis['From'] }}</li>
+          <li><strong>To:</strong> {{ analysis['To'] }}</li>
+          <li><strong>Date:</strong> {{ analysis['Date'] }}</li>
+          <li><strong>Reply-To:</strong> {{ analysis['Reply-To'] }}</li>
+        </ul>
+        <h6>Gefundene URLs:</h6>
+        {% if analysis['URLs'] %}
+          <ul>{% for url in analysis['URLs'] %}<li>{{ url }}</li>{% endfor %}</ul>
+        {% else %}
+          <p>Keine Links in dieser E-Mail.</p>
+        {% endif %}
+        <h6>Technische Bewertungen:</h6>
+        <ul>{% for detail in analysis['score_details'] %}<li>{{ detail }}</li>{% endfor %}</ul>
+      </div>
+    </div>
+
+    <div class="text-center">
+      <a href="/" class="btn btn-link">Zurück zur Startseite</a>
+    </div>
   </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-  <script>
-    const btns=document.querySelectorAll('#dark-mode-toggle');
-    btns.forEach(btn=>btn.onclick=()=>{document.body.classList.toggle('dark-mode');document.getElementById('dark-mode-style').disabled=!document.body.classList.contains('dark-mode');});
-  </script>
-</body></html>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
